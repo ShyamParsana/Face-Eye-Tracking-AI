@@ -26,11 +26,6 @@
     
     const annotatedImg = document.getElementById('annotated-stream');
     const videoPlaceholder = document.getElementById('video-placeholder');
-    const placeholderSpinner = document.getElementById('placeholder-spinner');
-    const placeholderIcon = document.getElementById('placeholder-icon');
-    const placeholderStatusText = document.getElementById('placeholder-status-text');
-    const placeholderHelp = document.getElementById('placeholder-help');
-    const btnRetryCamera = document.getElementById('btn-retry-camera');
     
     const connectionDot = document.getElementById('connection-dot');
     const connectionText = document.getElementById('connection-text');
@@ -191,11 +186,6 @@
     // Camera Access Initialization (Responsive for Mobile & Desktop)
     async function initCamera() {
         try {
-            if (placeholderSpinner) placeholderSpinner.classList.remove('hidden');
-            if (placeholderIcon) placeholderIcon.classList.add('hidden');
-            if (placeholderHelp) placeholderHelp.classList.add('hidden');
-            if (placeholderStatusText) placeholderStatusText.textContent = 'Requesting camera access in browser...';
-
             modalError.classList.add('hidden');
             btnGrantCamera.textContent = 'Requesting camera...';
             btnGrantCamera.disabled = true;
@@ -243,32 +233,17 @@
             });
 
             permissionModal.classList.add('hidden');
-            if (placeholderStatusText) placeholderStatusText.textContent = 'Camera active. Processing video stream...';
-            
-            // Ensure streaming is running
             startWebSocketStreaming();
         } catch (err) {
             console.error('Camera access denied or prompt required:', err);
             btnGrantCamera.disabled = false;
             btnGrantCamera.textContent = 'Grant Camera Access';
-            
-            if (placeholderSpinner) placeholderSpinner.classList.add('hidden');
-            if (placeholderIcon) placeholderIcon.classList.remove('hidden');
-            if (placeholderStatusText) placeholderStatusText.textContent = 'Camera Access Blocked or In Use';
-            if (placeholderHelp) placeholderHelp.classList.remove('hidden');
-            
             modalError.textContent = `Error accessing webcam: ${err.message || err}. Please allow camera access in browser settings.`;
             modalError.classList.remove('hidden');
         }
     }
 
     btnGrantCamera.addEventListener('click', initCamera);
-    if (btnRetryCamera) {
-        btnRetryCamera.addEventListener('click', initCamera);
-    }
-
-    // Connect to Python Backend Engine immediately on page load
-    startWebSocketStreaming();
 
     // Auto-attempt camera start immediately when page opens
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
