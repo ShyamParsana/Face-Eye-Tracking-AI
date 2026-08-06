@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/demo.css?v=2.1.0">
+    <link rel="stylesheet" href="/static/css/demo.css?v=3.0.0">
     <!-- Chart.js for pixel-perfect Matplotlib graph replication -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -149,8 +149,18 @@
                     <!-- Main display image receiving annotated OpenCV frames -->
                     <img id="annotated-stream" class="annotated-stream" alt="Python OpenCV Video Stream" style="opacity: 0;" />
                     <div id="video-placeholder" class="video-placeholder">
-                        <div class="spinner"></div>
-                        <span id="placeholder-status-text">Initializing Camera Stream &amp; Python Backend...</span>
+                        <div class="spinner" id="placeholder-spinner"></div>
+                        <div id="placeholder-icon" class="placeholder-icon hidden">📷</div>
+                        <span id="placeholder-status-text">Connecting to Python Engine &amp; Requesting Camera...</span>
+                        <div id="placeholder-help" class="placeholder-help hidden">
+                            <p class="placeholder-subtext">Camera access was not granted or is blocked.</p>
+                            <div class="placeholder-steps">
+                                <div>1. Click the <strong>camera / lock icon 🔒</strong> in your browser address bar</div>
+                                <div>2. Set Camera permission to <strong>"Always Allow"</strong></div>
+                                <div>3. Make sure no other program is using your webcam</div>
+                            </div>
+                            <button id="btn-retry-camera" class="btn btn-green btn-retry">🔄 Grant / Retry Camera</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -232,7 +242,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Scripts -->
-    <script src="/static/js/webrtc.js?v=2.1.0"></script>
-    <script src="/static/js/demo.js?v=2.1.0"></script>
+    <script src="/static/js/webrtc.js?v=3.0.0"></script>
+    <script src="/static/js/demo.js?v=3.0.0"></script>
 </body>
 </html>
