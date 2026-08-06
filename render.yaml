@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: face-eye-tracking-ai
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000

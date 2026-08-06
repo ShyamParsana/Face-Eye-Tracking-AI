@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face & Eye Tracking AI | Real-Time Computer Vision Showcase</title>
+    <meta name="description" content="High-performance real-time face tracking, eye gaze estimation, EAR blink detection, and 3D head pose estimation powered by Python, MediaPipe, OpenCV, and FastAPI.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="dark-theme">
+    <!-- Background Glows -->
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <!-- Navigation Header -->
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="brand">
+                <span class="brand-icon">👁️</span>
+                <span class="brand-text">Face & Eye Tracking <span class="badge">AI</span></span>
+            </div>
+            <nav class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#architecture">Architecture</a>
+                <a href="#performance">Benchmarks</a>
+                <a href="#tech-stack">Tech Stack</a>
+            </nav>
+            <div class="nav-actions">
+                <a href="/demo" class="btn btn-primary btn-glow" id="nav-launch-demo" target="_blank">
+                    <span class="pulse-dot"></span>
+                    Launch Live Demo
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="hero-container">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <span class="badge-icon">⚡</span> 100% Python Computer Vision Engine &bull; Zero-Lag Streaming
+                </div>
+                <h1 class="hero-title">
+                    Real-Time Face & Eye <br>
+                    <span class="gradient-text">Movement Tracking</span>
+                </h1>
+                <p class="hero-subtitle">
+                    A production-grade Computer Vision system engineered with Python, MediaPipe, OpenCV, and FastAPI. Features sub-100ms latency, real-time 3D head pose estimation, Cartesian iris tracking, and EAR blink detection.
+                </p>
+                <div class="hero-cta-group">
+                    <a href="/demo" class="btn btn-lg btn-primary btn-glow" id="hero-launch-demo" target="_blank">
+                        <span class="btn-icon">🚀</span>
+                        Launch Live Demo
+                    </a>
+                    <a href="#architecture" class="btn btn-lg btn-outline">
+                        <span class="btn-icon">📐</span>
+                        View Architecture
+                    </a>
+                </div>
+                <!-- Metric Pills -->
+                <div class="metric-strip">
+                    <div class="metric-item">
+                        <span class="metric-val">30+</span>
+                        <span class="metric-lbl">Target FPS</span>
+                    </div>
+                    <div class="metric-divider"></div>
+                    <div class="metric-item">
+                        <span class="metric-val">&lt; 50ms</span>
+                        <span class="metric-lbl">Pipeline Latency</span>
+                    </div>
+                    <div class="metric-divider"></div>
+                    <div class="metric-item">
+                        <span class="metric-val">478</span>
+                        <span class="metric-lbl">Face Landmarks</span>
+                    </div>
+                    <div class="metric-divider"></div>
+                    <div class="metric-item">
+                        <span class="metric-val">Zero</span>
+                        <span class="metric-lbl">Base64 Overhead</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hero Interactive Preview Showcase -->
+            <div class="hero-preview-wrapper">
+                <div class="preview-window">
+                    <div class="window-header">
+                        <div class="window-dots">
+                            <span class="dot dot-red"></span>
+                            <span class="dot dot-yellow"></span>
+                            <span class="dot dot-green"></span>
+                        </div>
+                        <div class="window-title">Face & Eye Tracking AI &bull; Real-Time Pipeline View</div>
+                        <div class="window-status"><span class="status-live">● LIVE</span> 30 FPS</div>
+                    </div>
+                    <div class="window-body">
+                        <div class="mock-canvas">
+                            <div class="face-box-overlay">
+                                <div class="face-box-label">Pitch: -2.4° &nbsp; Yaw: +1.8°</div>
+                                <div class="eye-cluster left-cluster">
+                                    <span class="iris-dot"></span>
+                                </div>
+                                <div class="eye-cluster right-cluster">
+                                    <span class="iris-dot"></span>
+                                </div>
+                            </div>
+                            <div class="canvas-debug-text">X: -0.02 &nbsp; Y: +0.04 (Neutral)</div>
+                        </div>
+                        <div class="preview-telemetry">
+                            <div class="telemetry-chip">
+                                <span class="chip-label">Face Direction</span>
+                                <span class="chip-val">Neutral</span>
+                            </div>
+                            <div class="telemetry-chip">
+                                <span class="chip-label">Gaze Vector</span>
+                                <span class="chip-val">Center</span>
+                            </div>
+                            <div class="telemetry-chip">
+                                <span class="chip-label">EAR Ratio</span>
+                                <span class="chip-val">0.31 (Open)</span>
+                            </div>
+                            <div class="telemetry-chip">
+                                <span class="chip-label">Confidence</span>
+                                <span class="chip-val">98.4%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="section features-section">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-tag">Key Capabilities</span>
+                <h2 class="section-title">Engineered for Precision & Real-Time Performance</h2>
+                <p class="section-desc">Every algorithm is finely calibrated with Exponential Moving Average (EMA) smoothing and state-machine hysteresis for rock-solid accuracy.</p>
+            </div>
+
+            <div class="features-grid">
+                <!-- Feature 1 -->
+                <div class="feature-card">
+                    <div class="feature-icon">👤</div>
+                    <h3 class="feature-title">3D Head Pose Estimation</h3>
+                    <p class="feature-text">Calculates Pitch, Yaw, and Roll Euler angles in real time using OpenCV's Perspective-n-Point (PnP) solver with custom 3D facial model anchors.</p>
+                    <ul class="feature-bullets">
+                        <li>Directional State Machine (Up, Down, Left, Right)</li>
+                        <li>EMA Jitter Suppression (α = 0.3)</li>
+                        <li>Hysteresis thresholding to prevent double counts</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="feature-card">
+                    <div class="feature-icon">👁️</div>
+                    <h3 class="feature-title">Cartesian Iris Gaze Vectoring</h3>
+                    <p class="feature-text">High-precision iris center localization normalized to individual eye contours with dynamic zero-point baseline adaptation.</p>
+                    <ul class="feature-bullets">
+                        <li>Sub-pixel iris center detection</li>
+                        <li>Adaptive dynamic baseline tracking</li>
+                        <li>Directional state hysteresis (Left, Right, Up, Down)</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3 class="feature-title">EAR Blink Detection</h3>
+                    <p class="feature-text">Real-time Eye Aspect Ratio computation separating Left, Right, and Synchronous (Both) blinks with consecutive frame validation.</p>
+                    <ul class="feature-bullets">
+                        <li>Euclidean distance landmark ratio</li>
+                        <li>Noise-filtered consecutive frame debouncing</li>
+                        <li>Independent left/right eye classification</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3 class="feature-title">Live Telemetry & Activity Graph</h3>
+                    <p class="feature-text">Live visual stream with dark theme activity graphing tracking cumulative face and eye events across the session.</p>
+                    <ul class="feature-bullets">
+                        <li>Real-time event logging (Timestamp, Event, Count)</li>
+                        <li>Matplotlib-matching visual aesthetic</li>
+                        <li>Dynamic session time & FPS counter</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 5 -->
+                <div class="feature-card">
+                    <div class="feature-icon">💾</div>
+                    <h3 class="feature-title">Instant Data Export & Capture</h3>
+                    <p class="feature-text">One-click multi-format data exports formatted with comprehensive movement summaries and full session chronological histories.</p>
+                    <ul class="feature-bullets">
+                        <li>Full multi-table CSV & Excel (.xlsx) exports</li>
+                        <li>High-resolution screenshot capture</li>
+                        <li>Real-time MP4 session video recording</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 6 -->
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3 class="feature-title">Zero-Base64 Binary Streaming</h3>
+                    <p class="feature-text">Custom binary packet protocol transmitting raw packed JPEG frames and JSON telemetry headers with sub-20ms serialization.</p>
+                    <ul class="feature-bullets">
+                        <li>Single-slot frame dropping to eliminate latency buildup</li>
+                        <li>WebRTC native video track support via aiortc</li>
+                        <li>Thread-safe isolated multi-user sessions</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Architecture Section -->
+    <section id="architecture" class="section architecture-section">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-tag">System Design</span>
+                <h2 class="section-title">Producer-Consumer Streaming Architecture</h2>
+                <p class="section-desc">Client captures webcam frames, transfers raw binary buffers over WebSocket/WebRTC, and the Python backend executes MediaPipe & OpenCV without blocking.</p>
+            </div>
+
+            <div class="architecture-diagram">
+                <div class="arch-box client-box">
+                    <div class="arch-box-header">🌐 Client Browser (Frontend)</div>
+                    <div class="arch-box-content">
+                        <div class="arch-item">Camera Capture (<code>getUserMedia</code>)</div>
+                        <div class="arch-item">Offscreen Canvas Binary Encoder</div>
+                        <div class="arch-item">Binary WebSocket / WebRTC Transport</div>
+                        <div class="arch-item">CustomTkinter-Identical UI Renderer</div>
+                    </div>
+                </div>
+
+                <div class="arch-arrow">
+                    <span class="arrow-text">Raw Binary Frames &bull; &lt;10ms</span>
+                    <span class="arrow-symbol">⇄</span>
+                    <span class="arrow-text">Packed Binary + Telemetry</span>
+                </div>
+
+                <div class="arch-box server-box">
+                    <div class="arch-box-header">🐍 FastAPI Python Backend</div>
+                    <div class="arch-box-content">
+                        <div class="arch-item">Async Single-Slot Queue (Drop Old Frames)</div>
+                        <div class="arch-item"><code>FaceTracker</code> (MediaPipe & PnP Pose)</div>
+                        <div class="arch-item"><code>EyeTracker</code> (EAR & Cartesian Gaze)</div>
+                        <div class="arch-item"><code>EventLogger</code> & Dynamic Export Engine</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech Stack Section -->
+    <section id="tech-stack" class="section tech-section">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-tag">Technology Stack</span>
+                <h2 class="section-title">Built with Cutting-Edge Tools</h2>
+            </div>
+            <div class="tech-grid">
+                <div class="tech-card"><span class="tech-icon">🐍</span><span class="tech-name">Python 3.12</span></div>
+                <div class="tech-card"><span class="tech-icon">✨</span><span class="tech-name">MediaPipe</span></div>
+                <div class="tech-card"><span class="tech-icon">👁️</span><span class="tech-name">OpenCV</span></div>
+                <div class="tech-card"><span class="tech-icon">⚡</span><span class="tech-name">FastAPI</span></div>
+                <div class="tech-card"><span class="tech-icon">🔌</span><span class="tech-name">WebSockets</span></div>
+                <div class="tech-card"><span class="tech-icon">📡</span><span class="tech-name">WebRTC (aiortc)</span></div>
+                <div class="tech-card"><span class="tech-icon">🐳</span><span class="tech-name">Docker</span></div>
+                <div class="tech-card"><span class="tech-icon">🌐</span><span class="tech-name">NGINX</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="section cta-section">
+        <div class="cta-card">
+            <h2 class="cta-title">Experience the Tracking Engine Live</h2>
+            <p class="cta-desc">Launch the interactive live demo now directly in your browser with real-time camera tracking.</p>
+            <a href="/demo" class="btn btn-xl btn-primary btn-glow" id="cta-launch-demo" target="_blank">
+                <span class="btn-icon">⚡</span>
+                Launch Live Demo
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <p>&copy; 2026 Real-Time AI Face & Eye Movement Tracking System &bull; Production Ready.</p>
+        </div>
+    </footer>
+</body>
+</html>

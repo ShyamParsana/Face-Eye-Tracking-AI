@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1a1a1a">
+    <title>Face & Eye Tracking AI | Live Demo</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/demo.css">
+    <!-- Chart.js for pixel-perfect Matplotlib graph replication -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="dark-app">
+    <!-- Camera Permission / Status Banner -->
+    <div id="permission-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-icon">📷</div>
+            <h2>Webcam Access Required</h2>
+            <p>To run the real-time Face & Eye Tracking system, please grant camera permissions in your browser. All computer vision is executed live on the Python backend.</p>
+            <button id="btn-grant-camera" class="btn btn-primary btn-modal">Grant Camera Access</button>
+            <div id="modal-error" class="modal-error hidden"></div>
+        </div>
+    </div>
+
+    <!-- Mobile Top Navigation Header -->
+    <header class="mobile-header">
+        <div class="mobile-brand-link"><span class="brand-icon">👁️</span> Face &amp; Eye Tracking AI</div>
+        <div class="mobile-header-title">Face &amp; Eye Tracker</div>
+        <button id="btn-toggle-sidebar" class="btn btn-sm btn-icon-toggle" title="Toggle Dashboard Stats">
+            <span class="icon">📊</span> <span class="txt">Stats</span>
+        </button>
+    </header>
+
+    <!-- Main Application Layout Container -->
+    <div class="app-layout" id="app-layout">
+        <!-- Sidebar for stats (Matching CustomTkinter CTkScrollableFrame on desktop, collapsible drawer on mobile) -->
+        <aside class="sidebar-frame" id="sidebar-frame">
+            <div class="sidebar-header">
+                <h1 class="sidebar-title">Tracking Dashboard</h1>
+                <button id="btn-close-sidebar" class="btn-close-mobile" aria-label="Close Sidebar">&times;</button>
+            </div>
+            
+            <div class="stat-list">
+                <!-- Face Counts -->
+                <div class="stat-item">
+                    <span class="stat-label">Right Face Count:</span>
+                    <span class="stat-value" id="val-right-face">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Left Face Count:</span>
+                    <span class="stat-value" id="val-left-face">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Up Count:</span>
+                    <span class="stat-value" id="val-up-face">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Down Count:</span>
+                    <span class="stat-value" id="val-down-face">0</span>
+                </div>
+
+                <!-- Blink Counts -->
+                <div class="stat-item">
+                    <span class="stat-label">Left Blink Count:</span>
+                    <span class="stat-value" id="val-left-blink">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Right Blink Count:</span>
+                    <span class="stat-value" id="val-right-blink">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Both Blink Count:</span>
+                    <span class="stat-value" id="val-both-blink">0</span>
+                </div>
+
+                <!-- Eye Gaze Counts -->
+                <div class="stat-item">
+                    <span class="stat-label">Eye Left Count:</span>
+                    <span class="stat-value" id="val-eye-left">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Eye Right Count:</span>
+                    <span class="stat-value" id="val-eye-right">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Eye Up Count:</span>
+                    <span class="stat-value" id="val-eye-up">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Eye Down Count:</span>
+                    <span class="stat-value" id="val-eye-down">0</span>
+                </div>
+
+                <!-- Live State Labels -->
+                <div class="stat-item highlight-item">
+                    <span class="stat-label">Current Face Direction:</span>
+                    <span class="stat-value highlight-val" id="val-face-dir">-</span>
+                </div>
+                <div class="stat-item highlight-item">
+                    <span class="stat-label">Current Eye Direction:</span>
+                    <span class="stat-value highlight-val" id="val-eye-dir">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Current FPS:</span>
+                    <span class="stat-value" id="val-fps">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Session Time:</span>
+                    <span class="stat-value" id="val-session-time">00:00</span>
+                </div>
+            </div>
+
+            <!-- Return to Portfolio Link -->
+            <div class="sidebar-footer">
+                <a href="/" class="back-link">&larr; Back to Portfolio</a>
+            </div>
+        </aside>
+
+        <!-- Sidebar Backdrop for Mobile Drawer -->
+        <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Controls Toolbar -->
+            <div class="top-toolbar">
+                <div class="status-indicator">
+                    <span class="status-dot" id="connection-dot"></span>
+                    <span class="status-text" id="connection-text">Connecting to Python Engine...</span>
+                </div>
+                <div class="telemetry-bar">
+                    <span class="telemetry-pill hide-on-xs">Engine: <strong>Python 3.12</strong></span>
+                    <span class="telemetry-pill hide-on-xs">Stream: <strong id="stream-protocol">Binary WS</strong></span>
+                    <span class="telemetry-pill">Latency: <strong id="val-latency">-- ms</strong></span>
+                    <span class="telemetry-pill">FPS: <strong id="val-top-fps">0</strong></span>
+                    <button class="btn btn-sm btn-icon-only hide-on-xs" id="btn-fullscreen" title="Toggle Fullscreen">⛶</button>
+                </div>
+            </div>
+
+            <!-- Video Display Frame (Matching Tkinter Label video_label) -->
+            <div class="video-frame-container">
+                <div class="video-frame" id="video-wrapper">
+                    <!-- Hidden elements for camera capture -->
+                    <video id="webcam-video" autoplay playsinline webkit-playsinline muted style="display: none;"></video>
+                    <canvas id="capture-canvas" style="display: none;"></canvas>
+                    
+                    <!-- Main display image receiving annotated OpenCV frames -->
+                    <img id="annotated-stream" alt="Python OpenCV Video Stream" src="" />
+                    <div id="video-placeholder" class="video-placeholder">
+                        <div class="spinner"></div>
+                        <span>Initializing Camera Stream &amp; Python Backend...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile Quick Stats Summary Grid (Only visible on small devices) -->
+            <div class="mobile-stats-grid">
+                <div class="mobile-stat-card">
+                    <span class="m-lbl">Face Dir</span>
+                    <span class="m-val" id="m-val-face-dir">-</span>
+                </div>
+                <div class="mobile-stat-card">
+                    <span class="m-lbl">Eye Dir</span>
+                    <span class="m-val" id="m-val-eye-dir">-</span>
+                </div>
+                <div class="mobile-stat-card">
+                    <span class="m-lbl">Face R/L/U/D</span>
+                    <span class="m-val" id="m-val-face-total">0/0/0/0</span>
+                </div>
+                <div class="mobile-stat-card">
+                    <span class="m-lbl">Blinks (L/R/B)</span>
+                    <span class="m-val" id="m-val-blink-total">0/0/0</span>
+                </div>
+            </div>
+
+            <!-- Live Matplotlib-Matching Graph Frame -->
+            <div class="graph-frame-container">
+                <div class="graph-frame">
+                    <canvas id="movement-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Bottom Frame: Buttons & Data Table -->
+            <div class="bottom-frame">
+                <!-- Action Buttons Grid -->
+                <div class="btn-frame">
+                    <div class="btn-row">
+                        <button id="btn-start" class="btn btn-green">Start Counting</button>
+                        <button id="btn-stop" class="btn btn-red" disabled>Stop Counting</button>
+                    </div>
+                    <div class="btn-row">
+                        <button id="btn-export-csv" class="btn btn-blue">Export CSV</button>
+                        <button id="btn-export-excel" class="btn btn-blue">Export Excel</button>
+                    </div>
+                    <div class="btn-row">
+                        <button id="btn-clear-data" class="btn btn-blue">Clear Data</button>
+                        <button id="btn-reset-counts" class="btn btn-blue">Reset Counts</button>
+                    </div>
+                    <div class="btn-row">
+                        <button id="btn-screenshot" class="btn btn-blue">Screenshot</button>
+                        <button id="btn-record" class="btn btn-blue">Start Recording</button>
+                    </div>
+                </div>
+
+                <!-- Treeview Styled Data Table -->
+                <div class="table-frame">
+                    <div class="table-header-bar">
+                        <span>Event History Log</span>
+                    </div>
+                    <div class="table-scroll-wrapper">
+                        <table class="treeview-table" id="log-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Event</th>
+                                    <th>Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="log-table-body">
+                                <!-- Dynamic Log Rows inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/static/js/webrtc.js"></script>
+    <script src="/static/js/demo.js"></script>
+</body>
+</html>
