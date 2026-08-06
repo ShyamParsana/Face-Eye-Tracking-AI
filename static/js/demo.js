@@ -190,56 +190,44 @@
             btnGrantCamera.textContent = 'Requesting camera...';
             btnGrantCamera.disabled = true;
 
-            const constraints = {
-                video: {
-                    facingMode: 'user', // Default to front camera on smartphones
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                    frameRate: { ideal: 30 }
-                },
-                audio: false
-            };
-
-            let stream;
+            let stream = null;
             try {
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-            } catch (fallbackErr) {
-                // Fallback to generic video if facingMode or constraints are unsupported
-                console.warn('Fallback to basic video constraints:', fallbackErr);
-                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
+                    audio: false
+                });
+            } catch (e1) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                } catch (e2) {
+                    throw e2;
+                }
             }
 
             localStream = stream;
+            webcamVideo.srcObject = stream;
 
-            await new Promise((resolve) => {
-                let resolved = false;
-                const onReady = () => {
-                    if (!resolved) {
-                        resolved = true;
-                        webcamVideo.play().catch((e) => console.warn('Video play caught:', e));
-                        captureCanvas.width = webcamVideo.videoWidth || 640;
-                        captureCanvas.height = webcamVideo.videoHeight || 480;
-                        resolve();
-                    }
-                };
+            try {
+                await webcamVideo.play();
+            } catch (pErr) {
+                console.warn('Video play exception:', pErr);
+            }
 
-                webcamVideo.onloadedmetadata = onReady;
-                webcamVideo.oncanplay = onReady;
-                webcamVideo.onplaying = onReady;
-                webcamVideo.srcObject = stream;
+            captureCanvas.width = webcamVideo.videoWidth || 640;
+            captureCanvas.height = webcamVideo.videoHeight || 480;
 
-                // Fallback timeout in case browser events fire asynchronously or are delayed
-                setTimeout(onReady, 800);
-            });
-
+            // Immediately show live video feed and dismiss modal & loading spinner
             permissionModal.classList.add('hidden');
+            videoPlaceholder.style.display = 'none';
+
             startWebSocketStreaming();
         } catch (err) {
             console.error('Camera access denied or prompt required:', err);
             btnGrantCamera.disabled = false;
             btnGrantCamera.textContent = 'Grant Camera Access';
-            modalError.textContent = `Error accessing webcam: ${err.message || err}. Please allow camera access in browser settings.`;
+            modalError.textContent = `Camera Error (${err.name || 'Error'}): ${err.message || 'Please allow webcam access in your browser settings.'}`;
             modalError.classList.remove('hidden');
+            permissionModal.classList.remove('hidden');
         }
     }
 
