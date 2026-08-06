@@ -26,7 +26,9 @@ class FaceTracker:
         Args:
             logger: EventLogger instance to record events.
         """
-        base_options = python.BaseOptions(model_asset_path='face_landmarker.task')
+        import os
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'face_landmarker.task')
+        base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.FaceLandmarkerOptions(
             base_options=base_options,
             output_face_blendshapes=False,

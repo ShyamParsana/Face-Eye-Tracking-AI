@@ -357,6 +357,17 @@ body.dark-app {
     position: relative;
 }
 
+.offscreen-capture {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    width: 640px;
+    height: 480px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -100;
+}
+
 #annotated-stream {
     max-width: 100%;
     max-height: 100%;
@@ -364,6 +375,7 @@ body.dark-app {
     height: auto;
     object-fit: contain;
     display: block;
+    transition: opacity 0.2s ease-in;
 }
 
 .video-placeholder {
@@ -376,6 +388,7 @@ body.dark-app {
     font-size: 0.85rem;
     text-align: center;
     padding: 16px;
+    z-index: 10;
 }
 
 .spinner {

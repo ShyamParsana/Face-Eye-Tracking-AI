@@ -181,6 +181,8 @@
         }
     });
 
+    let firstFrameReceived = false;
+
     // Camera Access Initialization (Responsive for Mobile & Desktop)
     async function initCamera() {
         try {
@@ -202,20 +204,32 @@
             try {
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
             } catch (fallbackErr) {
-                // Fallback to generic video if facingMode is unsupported
+                // Fallback to generic video if facingMode or constraints are unsupported
+                console.warn('Fallback to basic video constraints:', fallbackErr);
                 stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             }
 
             localStream = stream;
-            webcamVideo.srcObject = stream;
-            
+
             await new Promise((resolve) => {
-                webcamVideo.onloadedmetadata = () => {
-                    webcamVideo.play();
-                    captureCanvas.width = webcamVideo.videoWidth || 640;
-                    captureCanvas.height = webcamVideo.videoHeight || 480;
-                    resolve();
+                let resolved = false;
+                const onReady = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        webcamVideo.play().catch((e) => console.warn('Video play caught:', e));
+                        captureCanvas.width = webcamVideo.videoWidth || 640;
+                        captureCanvas.height = webcamVideo.videoHeight || 480;
+                        resolve();
+                    }
                 };
+
+                webcamVideo.onloadedmetadata = onReady;
+                webcamVideo.oncanplay = onReady;
+                webcamVideo.onplaying = onReady;
+                webcamVideo.srcObject = stream;
+
+                // Fallback timeout in case browser events fire asynchronously or are delayed
+                setTimeout(onReady, 800);
             });
 
             permissionModal.classList.add('hidden');
@@ -224,7 +238,7 @@
             console.error('Camera access denied or prompt required:', err);
             btnGrantCamera.disabled = false;
             btnGrantCamera.textContent = 'Grant Camera Access';
-            modalError.textContent = `Error accessing webcam: ${err.message}. Please click above to allow camera access.`;
+            modalError.textContent = `Error accessing webcam: ${err.message || err}. Please allow camera access in browser settings.`;
             modalError.classList.remove('hidden');
         }
     }
@@ -238,6 +252,10 @@
 
     // High-Performance Binary WebSocket Client
     function startWebSocketStreaming() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/track/${sessionId}`;
 
@@ -251,8 +269,8 @@
             connectionDot.className = 'status-dot connected';
             connectionText.textContent = 'PYTHON 3.12 ENGINE CONNECTED';
             if (streamProtocol) streamProtocol.textContent = 'Binary WS';
-            videoPlaceholder.style.display = 'none';
             isStreaming = true;
+            isProcessingFrame = false;
             captureAndSendLoop();
         };
 
@@ -284,12 +302,14 @@
             console.error('WebSocket error:', err);
             connectionDot.className = 'status-dot error';
             connectionText.textContent = 'Connection Error';
+            isProcessingFrame = false;
         };
 
         ws.onclose = () => {
             connectionDot.className = 'status-dot error';
-            connectionText.textContent = 'Disconnected &bull; Retrying...';
+            connectionText.textContent = 'Disconnected • Retrying...';
             isStreaming = false;
+            isProcessingFrame = false;
             setTimeout(startWebSocketStreaming, 2000);
         };
     }
@@ -297,23 +317,34 @@
     // Zero-Base64 Binary Packet Unpacker
     function unpackBinaryPacket(buffer) {
         try {
+            if (buffer.byteLength < 4) return;
             const view = new DataView(buffer);
             const jsonLength = view.getUint32(0, false); // 4-byte uint32 Big Endian
             
+            if (buffer.byteLength < 4 + jsonLength) return;
+
             const jsonBytes = new Uint8Array(buffer, 4, jsonLength);
             const jsonStr = new TextDecoder('utf-8').decode(jsonBytes);
             const telemetry = JSON.parse(jsonStr);
 
             // Remaining bytes are pure JPEG image bytes
             const imageBytes = new Uint8Array(buffer, 4 + jsonLength);
-            const blob = new Blob([imageBytes], { type: 'image/jpeg' });
-            
-            // Release memory of previous frame object URL
-            if (prevBlobUrl) {
-                URL.revokeObjectURL(prevBlobUrl);
+            if (imageBytes.length > 0) {
+                const blob = new Blob([imageBytes], { type: 'image/jpeg' });
+                
+                // Release memory of previous frame object URL
+                if (prevBlobUrl) {
+                    URL.revokeObjectURL(prevBlobUrl);
+                }
+                prevBlobUrl = URL.createObjectURL(blob);
+                annotatedImg.src = prevBlobUrl;
+
+                if (!firstFrameReceived) {
+                    firstFrameReceived = true;
+                    videoPlaceholder.style.display = 'none';
+                    annotatedImg.style.opacity = '1';
+                }
             }
-            prevBlobUrl = URL.createObjectURL(blob);
-            annotatedImg.src = prevBlobUrl;
 
             // Update UI with telemetry
             updateDashboard(telemetry);
@@ -326,9 +357,23 @@
     function captureAndSendLoop() {
         if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
 
-        if (!isProcessingFrame && webcamVideo.readyState >= 2) {
+        const now = performance.now();
+
+        // Watchdog: If server didn't respond within 800ms, unlock the pipeline
+        if (isProcessingFrame && (now - lastSendTime > 800)) {
+            isProcessingFrame = false;
+        }
+
+        if (!isProcessingFrame && (webcamVideo.readyState >= 2 || webcamVideo.currentTime > 0)) {
             isProcessingFrame = true;
-            lastSendTime = performance.now();
+            lastSendTime = now;
+
+            const vWidth = webcamVideo.videoWidth || 640;
+            const vHeight = webcamVideo.videoHeight || 480;
+            if (captureCanvas.width !== vWidth || captureCanvas.height !== vHeight) {
+                captureCanvas.width = vWidth;
+                captureCanvas.height = vHeight;
+            }
 
             // Draw current webcam frame onto offscreen canvas
             captureCtx.drawImage(webcamVideo, 0, 0, captureCanvas.width, captureCanvas.height);
@@ -337,12 +382,19 @@
             captureCanvas.toBlob((blob) => {
                 if (blob && ws && ws.readyState === WebSocket.OPEN) {
                     blob.arrayBuffer().then((buffer) => {
-                        ws.send(buffer);
+                        try {
+                            ws.send(buffer);
+                        } catch (sendErr) {
+                            console.error('WS send error:', sendErr);
+                            isProcessingFrame = false;
+                        }
+                    }).catch(() => {
+                        isProcessingFrame = false;
                     });
                 } else {
                     isProcessingFrame = false;
                 }
-            }, 'image/jpeg', 0.85);
+            }, 'image/jpeg', 0.80);
         }
 
         requestAnimationFrame(captureAndSendLoop);

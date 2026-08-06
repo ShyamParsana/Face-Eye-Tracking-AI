@@ -142,15 +142,15 @@
             <!-- Video Display Frame (Matching Tkinter Label video_label) -->
             <div class="video-frame-container">
                 <div class="video-frame" id="video-wrapper">
-                    <!-- Hidden elements for camera capture -->
-                    <video id="webcam-video" autoplay playsinline webkit-playsinline muted style="display: none;"></video>
-                    <canvas id="capture-canvas" style="display: none;"></canvas>
+                    <!-- Offscreen elements for camera capture (kept active in browser media pipeline) -->
+                    <video id="webcam-video" class="offscreen-capture" autoplay playsinline webkit-playsinline muted></video>
+                    <canvas id="capture-canvas" class="offscreen-capture"></canvas>
                     
                     <!-- Main display image receiving annotated OpenCV frames -->
-                    <img id="annotated-stream" alt="Python OpenCV Video Stream" src="" />
+                    <img id="annotated-stream" class="annotated-stream" alt="Python OpenCV Video Stream" style="opacity: 0;" />
                     <div id="video-placeholder" class="video-placeholder">
                         <div class="spinner"></div>
-                        <span>Initializing Camera Stream &amp; Python Backend...</span>
+                        <span id="placeholder-status-text">Initializing Camera Stream &amp; Python Backend...</span>
                     </div>
                 </div>
             </div>

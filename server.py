@@ -68,7 +68,9 @@ class WebRTCOfferRequest(BaseModel):
     session_id: str
 
 @app.get("/", response_class=HTMLResponse)
+@app.head("/")
 @app.get("/demo", response_class=HTMLResponse)
+@app.head("/demo")
 async def serve_demo():
     """Serve the interactive live demo dashboard directly."""
     demo_path = os.path.join("templates", "demo.html")
@@ -78,6 +80,7 @@ async def serve_demo():
     return HTMLResponse("<h1>Demo template not found.</h1>")
 
 @app.get("/health")
+@app.head("/health")
 async def health_check():
     """Health check endpoint for container orchestrators and cloud platforms."""
     return {
