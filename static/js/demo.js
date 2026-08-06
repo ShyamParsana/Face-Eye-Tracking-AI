@@ -364,7 +364,14 @@
             isProcessingFrame = false;
         }
 
-        if (!isProcessingFrame && (webcamVideo.readyState >= 2 || webcamVideo.currentTime > 0)) {
+        // Ensure webcam is actively playing
+        if (webcamVideo.paused && webcamVideo.srcObject) {
+            webcamVideo.play().catch(() => {});
+        }
+
+        const hasActiveStream = (webcamVideo.readyState >= 2 || webcamVideo.currentTime > 0 || (webcamVideo.srcObject && webcamVideo.srcObject.active));
+
+        if (!isProcessingFrame && hasActiveStream) {
             isProcessingFrame = true;
             lastSendTime = now;
 
