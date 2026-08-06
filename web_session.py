@@ -111,11 +111,19 @@ class SessionState:
         # Mirror frame horizontally (matches original CameraManager behavior)
         frame = cv2.flip(frame_bgr, 1)
         
-        # 1. Face Tracker (MediaPipe, Bounding box, Head Pose, Pitch/Yaw drawing)
-        frame, face_results, face_dir = self.face_tracker.process_frame(frame)
+        face_dir = "Neutral"
+        eye_dir = "Center"
         
-        # 2. Eye Tracker (EAR, Blink detection, Iris tracking, Landmark drawing)
-        eye_dir = self.eye_tracker.process_eyes(frame, face_results, face_dir)
+        try:
+            # 1. Face Tracker (MediaPipe, Bounding box, Head Pose, Pitch/Yaw drawing)
+            frame, face_results, face_dir = self.face_tracker.process_frame(frame)
+            
+            # 2. Eye Tracker (EAR, Blink detection, Iris tracking, Landmark drawing)
+            eye_dir = self.eye_tracker.process_eyes(frame, face_results, face_dir)
+        except Exception as cv_err:
+            import traceback
+            traceback.print_exc()
+            cv2.putText(frame, "CV Processing Active", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         
         # 3. Video Writer if recording
         if self.is_recording and self.video_writer is not None:

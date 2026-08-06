@@ -56,5 +56,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 EXPOSE 8000
 
-# Run FastAPI server via Uvicorn
-CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT} --workers 1 --loop uvloop --http httptools"]
+# Run FastAPI server via Uvicorn with standard WebSockets engine
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT} --workers 1 --ws websockets"]

@@ -97,8 +97,16 @@ class EyeTracker:
             
             # --- Gaze Detection (Cartesian Logic) ---
             def get_eye_features(eye_idxs, iris_idxs):
-                eye_pts = [shape[i] for i in eye_idxs]
-                iris_pt = np.mean([shape[i] for i in iris_idxs], axis=0).astype(int)
+                eye_pts = [shape[i] for i in eye_idxs if i < len(shape)]
+                if not eye_pts:
+                    return (0, 0), 0.0, 0.0
+                    
+                valid_iris = [shape[i] for i in iris_idxs if i < len(shape)]
+                if valid_iris:
+                    iris_pt = np.mean(valid_iris, axis=0).astype(int)
+                else:
+                    iris_pt = np.mean(eye_pts, axis=0).astype(int)
+
                 xs = [pt[0] for pt in eye_pts]
                 ys = [pt[1] for pt in eye_pts]
                 
@@ -131,8 +139,10 @@ class EyeTracker:
             
             if frame is not None:
                 # Draw Blue dots on the pupil/iris center
-                cv2.circle(frame, tuple(l_iris), 3, (255, 0, 0), -1) 
-                cv2.circle(frame, tuple(r_iris), 3, (255, 0, 0), -1)
+                if l_iris[0] > 0 and l_iris[1] > 0:
+                    cv2.circle(frame, tuple(l_iris), 3, (255, 0, 0), -1)
+                if r_iris[0] > 0 and r_iris[1] > 0:
+                    cv2.circle(frame, tuple(r_iris), 3, (255, 0, 0), -1)
                 
             # Average the dx and dy for both eyes to cancel out resting asymmetry
             raw_avg_dx = (l_dx + r_dx) / 2.0

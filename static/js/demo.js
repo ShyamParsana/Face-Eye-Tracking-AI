@@ -250,7 +250,10 @@
         initCamera();
     }
 
-    // High-Performance Binary WebSocket Client
+    let wsRetryCount = 0;
+    let streamMode = 'WS'; // 'WS' or 'HTTP'
+
+    // High-Performance Binary WebSocket Client with Auto-HTTP Fallback
     function startWebSocketStreaming() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
             return;
@@ -262,56 +265,82 @@
         connectionText.textContent = 'Connecting...';
         connectionDot.className = 'status-dot';
 
-        ws = new WebSocket(wsUrl);
-        ws.binaryType = 'arraybuffer';
+        try {
+            ws = new WebSocket(wsUrl);
+            ws.binaryType = 'arraybuffer';
 
-        ws.onopen = () => {
-            connectionDot.className = 'status-dot connected';
-            connectionText.textContent = 'PYTHON 3.12 ENGINE CONNECTED';
-            if (streamProtocol) streamProtocol.textContent = 'Binary WS';
-            isStreaming = true;
-            isProcessingFrame = false;
-            captureAndSendLoop();
-        };
+            ws.onopen = () => {
+                wsRetryCount = 0;
+                streamMode = 'WS';
+                connectionDot.className = 'status-dot connected';
+                connectionText.textContent = 'PYTHON 3.12 ENGINE CONNECTED';
+                if (streamProtocol) streamProtocol.textContent = 'Binary WS';
+                isStreaming = true;
+                isProcessingFrame = false;
+                captureAndSendLoop();
+            };
 
-        ws.onmessage = (event) => {
-            // Calculate round-trip frame latency
-            const now = performance.now();
-            if (lastSendTime > 0) {
-                const latency = Math.round(now - lastSendTime);
-                valLatency.textContent = `${latency} ms`;
-            }
-            isProcessingFrame = false;
-
-            if (event.data instanceof ArrayBuffer) {
-                unpackBinaryPacket(event.data);
-            } else if (typeof event.data === 'string') {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'recording_state') {
-                        isRecording = data.is_recording;
-                        updateRecordingButton();
-                    }
-                } catch (e) {
-                    console.debug('WS text parse error:', e);
+            ws.onmessage = (event) => {
+                const now = performance.now();
+                if (lastSendTime > 0) {
+                    const latency = Math.round(now - lastSendTime);
+                    valLatency.textContent = `${latency} ms`;
                 }
-            }
-        };
+                isProcessingFrame = false;
 
-        ws.onerror = (err) => {
-            console.error('WebSocket error:', err);
-            connectionDot.className = 'status-dot error';
-            connectionText.textContent = 'Connection Error';
-            isProcessingFrame = false;
-        };
+                if (event.data instanceof ArrayBuffer) {
+                    unpackBinaryPacket(event.data);
+                } else if (typeof event.data === 'string') {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'recording_state') {
+                            isRecording = data.is_recording;
+                            updateRecordingButton();
+                        }
+                    } catch (e) {
+                        console.debug('WS text parse error:', e);
+                    }
+                }
+            };
 
-        ws.onclose = () => {
-            connectionDot.className = 'status-dot error';
-            connectionText.textContent = 'Disconnected • Retrying...';
-            isStreaming = false;
-            isProcessingFrame = false;
-            setTimeout(startWebSocketStreaming, 2000);
-        };
+            ws.onerror = (err) => {
+                console.warn('WebSocket status note:', err);
+                isProcessingFrame = false;
+            };
+
+            ws.onclose = () => {
+                wsRetryCount++;
+                isProcessingFrame = false;
+                
+                if (wsRetryCount >= 2 && streamMode !== 'HTTP') {
+                    // Activate transparent HTTP frame streaming fallback
+                    console.log('Activating HTTP Streaming Fallback...');
+                    streamMode = 'HTTP';
+                    isStreaming = true;
+                    connectionDot.className = 'status-dot connected';
+                    connectionText.textContent = 'PYTHON 3.12 ENGINE (HTTP STREAM)';
+                    if (streamProtocol) streamProtocol.textContent = 'HTTP Stream';
+                    captureAndSendLoop();
+                    
+                    // Periodic retry for WebSocket upgrade
+                    setTimeout(() => {
+                        if (streamMode === 'HTTP') startWebSocketStreaming();
+                    }, 15000);
+                } else if (streamMode === 'WS') {
+                    connectionDot.className = 'status-dot';
+                    connectionText.textContent = 'Connecting...';
+                    setTimeout(startWebSocketStreaming, 2000);
+                }
+            };
+        } catch (wsErr) {
+            console.warn('WebSocket init exception, falling back to HTTP:', wsErr);
+            streamMode = 'HTTP';
+            isStreaming = true;
+            connectionDot.className = 'status-dot connected';
+            connectionText.textContent = 'PYTHON 3.12 ENGINE (HTTP STREAM)';
+            if (streamProtocol) streamProtocol.textContent = 'HTTP Stream';
+            captureAndSendLoop();
+        }
     }
 
     // Zero-Base64 Binary Packet Unpacker
@@ -355,7 +384,7 @@
 
     // Adaptive Frame Capture and Sending Loop
     function captureAndSendLoop() {
-        if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+        if (!isStreaming) return;
 
         const now = performance.now();
 
@@ -385,9 +414,14 @@
             // Draw current webcam frame onto offscreen canvas
             captureCtx.drawImage(webcamVideo, 0, 0, captureCanvas.width, captureCanvas.height);
             
-            // Export canvas directly as binary JPEG blob (Zero Base64)
+            // Export canvas directly as binary JPEG blob
             captureCanvas.toBlob((blob) => {
-                if (blob && ws && ws.readyState === WebSocket.OPEN) {
+                if (!blob) {
+                    isProcessingFrame = false;
+                    return;
+                }
+
+                if (streamMode === 'WS' && ws && ws.readyState === WebSocket.OPEN) {
                     blob.arrayBuffer().then((buffer) => {
                         try {
                             ws.send(buffer);
@@ -399,7 +433,26 @@
                         isProcessingFrame = false;
                     });
                 } else {
-                    isProcessingFrame = false;
+                    // Transparent HTTP Frame Stream Fallback
+                    fetch(`/api/session/${sessionId}/frame`, {
+                        method: 'POST',
+                        body: blob,
+                        headers: { 'Content-Type': 'application/octet-stream' }
+                    })
+                    .then((res) => {
+                        if (!res.ok) throw new Error('HTTP Frame Error');
+                        return res.arrayBuffer();
+                    })
+                    .then((buffer) => {
+                        const frameLatency = Math.round(performance.now() - lastSendTime);
+                        valLatency.textContent = `${frameLatency} ms`;
+                        isProcessingFrame = false;
+                        unpackBinaryPacket(buffer);
+                    })
+                    .catch((httpErr) => {
+                        console.warn('HTTP frame stream note:', httpErr);
+                        isProcessingFrame = false;
+                    });
                 }
             }, 'image/jpeg', 0.80);
         }

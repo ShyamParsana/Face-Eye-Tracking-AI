@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -145,6 +145,19 @@ async def websocket_tracking_endpoint(websocket: WebSocket, session_id: str):
         logger.error(f"WebSocket error in session {session_id}: {e}")
     finally:
         session_manager.remove_session(session_id)
+
+@app.post("/api/session/{session_id}/frame")
+async def process_frame_http(session_id: str, request: Request):
+    """
+    HTTP POST Fallback Endpoint for streaming frames when WebSockets are blocked by client firewalls/proxies.
+    Accepts raw JPEG bytes and returns packed binary packet.
+    """
+    session = session_manager.get_or_create_session(session_id)
+    raw_bytes = await request.body()
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Empty frame body")
+    response_packet = session.process_binary_packet(raw_bytes)
+    return Response(content=response_packet, media_type="application/octet-stream")
 
 @app.post("/offer")
 async def webrtc_offer(payload: WebRTCOfferRequest):
