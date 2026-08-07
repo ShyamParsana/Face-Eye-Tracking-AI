@@ -283,11 +283,19 @@
         connectionText.textContent = 'Connecting to Python Engine...';
         connectionDot.className = 'status-dot';
 
+        let wsTimeout = setTimeout(() => {
+            if (ws && ws.readyState !== WebSocket.OPEN) {
+                console.log('WebSocket handshake taking >3s, switching to HTTP stream fallback...');
+                switchToHttpFallback();
+            }
+        }, 3000);
+
         try {
             ws = new WebSocket(wsUrl);
             ws.binaryType = 'arraybuffer';
 
             ws.onopen = () => {
+                clearTimeout(wsTimeout);
                 wsRetryCount = 0;
                 streamMode = 'WS';
                 connectionDot.className = 'status-dot connected';
@@ -322,17 +330,20 @@
             };
 
             ws.onerror = (err) => {
+                clearTimeout(wsTimeout);
                 console.warn('WebSocket status note, switching to HTTP stream fallback:', err);
                 isProcessingFrame = false;
                 switchToHttpFallback();
             };
 
             ws.onclose = () => {
+                clearTimeout(wsTimeout);
                 wsRetryCount++;
                 isProcessingFrame = false;
                 switchToHttpFallback();
             };
         } catch (wsErr) {
+            clearTimeout(wsTimeout);
             console.warn('WebSocket init exception, switching to HTTP stream fallback:', wsErr);
             switchToHttpFallback();
         }

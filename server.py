@@ -175,7 +175,7 @@ async def process_frame_http(session_id: str, request: Request):
         raise
     except Exception as e:
         logger.error(f"HTTP frame processing error for {session_id}: {e}", exc_info=True)
-        return Response(content=b"", media_type="application/octet-stream", status_code=200)
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/offer")
 async def webrtc_offer(payload: WebRTCOfferRequest):

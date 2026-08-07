@@ -28,9 +28,12 @@ class FaceTracker:
         """
         import os
         model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'face_landmarker.task')
+        if not os.path.exists(model_path):
+            model_path = 'face_landmarker.task'
         base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.FaceLandmarkerOptions(
             base_options=base_options,
+            running_mode=vision.RunningMode.IMAGE,
             output_face_blendshapes=False,
             output_facial_transformation_matrixes=False,
             num_faces=1)
@@ -71,6 +74,7 @@ class FaceTracker:
         """
         # Convert BGR to RGB for MediaPipe
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb_frame = np.ascontiguousarray(rgb_frame)
         
         # Create MediaPipe Image
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
