@@ -142,15 +142,16 @@
             <!-- Video Display Frame (Matching Tkinter Label video_label) -->
             <div class="video-frame-container">
                 <div class="video-frame" id="video-wrapper">
-                    <!-- Offscreen elements for camera capture (kept active in browser media pipeline) -->
-                    <video id="webcam-video" class="offscreen-capture" autoplay playsinline webkit-playsinline muted></video>
-                    <canvas id="capture-canvas" class="offscreen-capture"></canvas>
+                    <!-- Live webcam video base layer (shows instant local feed without waiting for network) -->
+                    <video id="webcam-video" class="webcam-live-layer" autoplay playsinline webkit-playsinline muted></video>
+                    <!-- Offscreen canvas for frame capture and binary encoding -->
+                    <canvas id="capture-canvas" style="display: none;"></canvas>
                     
-                    <!-- Main display image receiving annotated OpenCV frames -->
-                    <img id="annotated-stream" class="annotated-stream" alt="Python OpenCV Video Stream" style="opacity: 0;" />
+                    <!-- Main display image receiving annotated OpenCV AI frames -->
+                    <img id="annotated-stream" class="annotated-stream-layer" alt="Python OpenCV Video Stream" />
                     <div id="video-placeholder" class="video-placeholder">
                         <div class="spinner"></div>
-                        <span id="placeholder-status-text">Initializing Camera Stream &amp; Python Backend...</span>
+                        <span id="placeholder-status-text">Starting Camera Stream...</span>
                     </div>
                 </div>
             </div>

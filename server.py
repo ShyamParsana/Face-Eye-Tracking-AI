@@ -21,7 +21,26 @@ logger = logging.getLogger("server")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Background cleanup task for idle sessions."""
+    """Background startup pre-warming and cleanup task for idle sessions."""
+    # Pre-warm MediaPipe model in background thread so initial user frame has 0ms model load delay
+    def prewarm_model():
+        try:
+            from face_tracker import FaceTracker
+            from eye_tracker import EyeTracker
+            from logger import EventLogger
+            import numpy as np
+            warmup_logger = EventLogger()
+            ft = FaceTracker(warmup_logger)
+            et = EyeTracker(warmup_logger)
+            dummy = np.zeros((480, 640, 3), dtype=np.uint8)
+            f, res, d = ft.process_frame(dummy)
+            et.process_eyes(f, res, d)
+            logger.info("MediaPipe Face & Eye Tracker models pre-warmed successfully.")
+        except Exception as e:
+            logger.warning(f"MediaPipe pre-warming note: {e}")
+
+    asyncio.get_event_loop().run_in_executor(None, prewarm_model)
+
     async def cleanup_loop():
         while True:
             await asyncio.sleep(60)
