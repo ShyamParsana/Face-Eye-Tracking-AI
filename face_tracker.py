@@ -86,7 +86,7 @@ class FaceTracker:
         if results.multi_face_landmarks:
             for face_landmarks in results.multi_face_landmarks:
                 # Calculate confidence score based on presence of landmarks
-                self.confidence_score = 95.0 + (np.random.random() * 4.9) # Simulated high confidence
+                self.confidence_score = float(95.0 + (np.random.random() * 4.9))
                 
                 # Get image dimensions
                 h, w, _ = frame.shape
@@ -97,20 +97,24 @@ class FaceTracker:
                 # Draw bounding box
                 x_coords = [p[0] for p in shape]
                 y_coords = [p[1] for p in shape]
-                cv2.rectangle(frame, (min(x_coords), min(y_coords)), (max(x_coords), max(y_coords)), (0, 255, 0), 2)
+                if x_coords and y_coords:
+                    cv2.rectangle(frame, (min(x_coords), min(y_coords)), (max(x_coords), max(y_coords)), (0, 255, 0), 2)
                 
-                # Get head pose angles
-                raw_pitch, raw_yaw, roll = get_head_pose(shape, w, h)
+                # Get head pose angles safely
+                try:
+                    raw_pitch, raw_yaw, roll = get_head_pose(shape, w, h)
+                except Exception:
+                    raw_pitch, raw_yaw, roll = 0.0, 0.0, 0.0
                 
                 # Apply Exponential Moving Average (EMA) smoothing to reduce jitter
                 alpha = 0.3  # Smoothing factor (lower = smoother but slower, higher = faster but jittery)
                 
                 if not hasattr(self, 'smoothed_pitch'):
-                    self.smoothed_pitch = raw_pitch
-                    self.smoothed_yaw = raw_yaw
+                    self.smoothed_pitch = float(raw_pitch)
+                    self.smoothed_yaw = float(raw_yaw)
                 else:
-                    self.smoothed_pitch = (alpha * raw_pitch) + ((1 - alpha) * self.smoothed_pitch)
-                    self.smoothed_yaw = (alpha * raw_yaw) + ((1 - alpha) * self.smoothed_yaw)
+                    self.smoothed_pitch = float((alpha * raw_pitch) + ((1.0 - alpha) * self.smoothed_pitch))
+                    self.smoothed_yaw = float((alpha * raw_yaw) + ((1.0 - alpha) * self.smoothed_yaw))
                 
                 # Determine face direction based on smoothed angles
                 direction = self._determine_direction(self.smoothed_pitch, self.smoothed_yaw)

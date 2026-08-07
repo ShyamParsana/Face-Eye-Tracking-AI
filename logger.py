@@ -21,18 +21,27 @@ class EventLogger:
             count (int): The updated count for this event
         """
         timestamp = datetime.now().strftime("%H:%M:%S")
-        new_row = {"Timestamp": timestamp, "Event": event_name, "Count": count}
+        new_row = {"Timestamp": str(event_name if event_name else ""), "Event": str(event_name), "Count": int(count)}
+        # Set proper timestamp in column
+        new_row["Timestamp"] = timestamp
         # Use concat instead of append since append is deprecated in newer pandas
         self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
         
     def get_logs(self):
         """
-        Return the current logs as a list of lists for easy GUI display.
+        Return the current logs as a list of lists with native Python primitives.
         
         Returns:
             list: Log entries e.g. [['12:00:01', 'Face Right', 1], ...]
         """
-        return self.df.values.tolist()
+        raw_list = self.df.values.tolist()
+        clean_logs = []
+        for row in raw_list:
+            if len(row) >= 3:
+                clean_logs.append([str(row[0]), str(row[1]), int(row[2]) if str(row[2]).isdigit() else row[2]])
+            else:
+                clean_logs.append([str(item) for item in row])
+        return clean_logs
         
     def clear_data(self):
         """Clear all logged events."""

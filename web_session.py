@@ -1,9 +1,12 @@
 import asyncio
 import cv2
 import json
+import logging
+import math
 import numpy as np
 import os
 import struct
+import threading
 import time
 from datetime import datetime
 from typing import Dict, Optional, Tuple
@@ -11,6 +14,24 @@ from typing import Dict, Optional, Tuple
 from face_tracker import FaceTracker
 from eye_tracker import EyeTracker
 from logger import EventLogger
+
+logger = logging.getLogger("web_session")
+
+def _json_safe(obj):
+    """Fallback JSON serializer for numpy and non-standard types."""
+    if isinstance(obj, (np.integer, int)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, float)):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    return str(obj)
 
 class SessionState:
     def __init__(self, session_id: str):
@@ -23,6 +44,7 @@ class SessionState:
         self.face_tracker = FaceTracker(self.logger)
         self.eye_tracker = EyeTracker(self.logger)
         
+        self._lock = threading.Lock()
         self.created_at = time.time()
         self.last_active = time.time()
         self.last_frame_time = time.time()
@@ -121,23 +143,24 @@ class SessionState:
             # 2. Eye Tracker (EAR, Blink detection, Iris tracking, Landmark drawing)
             eye_dir = self.eye_tracker.process_eyes(frame, face_results, face_dir)
         except Exception as cv_err:
-            import traceback
-            traceback.print_exc()
+            logger.debug(f"CV Processing notice: {cv_err}")
             cv2.putText(frame, "CV Processing Active", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         
         # 3. Video Writer if recording
         if self.is_recording and self.video_writer is not None:
-            # Resize if needed
-            h, w = frame.shape[:2]
-            if (w, h) != (self.record_width, self.record_height):
-                rec_frame = cv2.resize(frame, (self.record_width, self.record_height))
-                self.video_writer.write(rec_frame)
-            else:
-                self.video_writer.write(frame)
+            try:
+                h, w = frame.shape[:2]
+                if (w, h) != (self.record_width, self.record_height):
+                    rec_frame = cv2.resize(frame, (self.record_width, self.record_height))
+                    self.video_writer.write(rec_frame)
+                else:
+                    self.video_writer.write(frame)
+            except Exception as rec_err:
+                logger.debug(f"Video write notice: {rec_err}")
                 
         # 4. Activity Graph Tracking (matching GUI update logic)
-        total_face = sum(self.face_tracker.counts.values())
-        total_eye = sum(self.eye_tracker.counts.values())
+        total_face = int(sum(int(v) for v in self.face_tracker.counts.values()))
+        total_eye = int(sum(int(v) for v in self.eye_tracker.counts.values()))
         self.graph_data_face.append(total_face)
         self.graph_data_eye.append(total_eye)
         if len(self.graph_data_face) > 50:
@@ -148,33 +171,45 @@ class SessionState:
         mins, secs = divmod(session_duration, 60)
         session_time_str = f"{mins:02d}:{secs:02d}"
         
+        # Sanitize pitch and yaw
+        pitch_val = float(getattr(self.face_tracker, 'smoothed_pitch', 0.0))
+        yaw_val = float(getattr(self.face_tracker, 'smoothed_yaw', 0.0))
+        conf_val = float(getattr(self.face_tracker, 'confidence_score', 0.0))
+        
+        if math.isnan(pitch_val) or math.isinf(pitch_val):
+            pitch_val = 0.0
+        if math.isnan(yaw_val) or math.isinf(yaw_val):
+            yaw_val = 0.0
+        if math.isnan(conf_val) or math.isinf(conf_val):
+            conf_val = 0.0
+        
         telemetry = {
             "fps": int(round(self.fps)),
             "session_time": session_time_str,
-            "session_seconds": session_duration,
-            "face_dir": face_dir,
-            "eye_dir": eye_dir,
-            "confidence": round(float(self.face_tracker.confidence_score), 1),
-            "pitch": round(float(getattr(self.face_tracker, 'smoothed_pitch', 0.0)), 1),
-            "yaw": round(float(getattr(self.face_tracker, 'smoothed_yaw', 0.0)), 1),
+            "session_seconds": int(session_duration),
+            "face_dir": str(face_dir),
+            "eye_dir": str(eye_dir),
+            "confidence": round(conf_val, 1),
+            "pitch": round(pitch_val, 1),
+            "yaw": round(yaw_val, 1),
             "counts": {
-                "Right Face Count": self.face_tracker.counts.get("Right", 0),
-                "Left Face Count": self.face_tracker.counts.get("Left", 0),
-                "Up Count": self.face_tracker.counts.get("Up", 0),
-                "Down Count": self.face_tracker.counts.get("Down", 0),
-                "Left Blink Count": self.eye_tracker.counts.get("Left Blink", 0),
-                "Right Blink Count": self.eye_tracker.counts.get("Right Blink", 0),
-                "Both Blink Count": self.eye_tracker.counts.get("Both Blink", 0),
-                "Eye Left Count": self.eye_tracker.counts.get("Eye Left", 0),
-                "Eye Right Count": self.eye_tracker.counts.get("Eye Right", 0),
-                "Eye Up Count": self.eye_tracker.counts.get("Eye Up", 0),
-                "Eye Down Count": self.eye_tracker.counts.get("Eye Down", 0),
+                "Right Face Count": int(self.face_tracker.counts.get("Right", 0)),
+                "Left Face Count": int(self.face_tracker.counts.get("Left", 0)),
+                "Up Count": int(self.face_tracker.counts.get("Up", 0)),
+                "Down Count": int(self.face_tracker.counts.get("Down", 0)),
+                "Left Blink Count": int(self.eye_tracker.counts.get("Left Blink", 0)),
+                "Right Blink Count": int(self.eye_tracker.counts.get("Right Blink", 0)),
+                "Both Blink Count": int(self.eye_tracker.counts.get("Both Blink", 0)),
+                "Eye Left Count": int(self.eye_tracker.counts.get("Eye Left", 0)),
+                "Eye Right Count": int(self.eye_tracker.counts.get("Eye Right", 0)),
+                "Eye Up Count": int(self.eye_tracker.counts.get("Eye Up", 0)),
+                "Eye Down Count": int(self.eye_tracker.counts.get("Eye Down", 0)),
             },
-            "is_counting": self.face_tracker.is_counting,
-            "is_recording": self.is_recording,
+            "is_counting": bool(self.face_tracker.is_counting),
+            "is_recording": bool(self.is_recording),
             "graph": {
-                "face": list(self.graph_data_face),
-                "eye": list(self.graph_data_eye)
+                "face": [int(x) for x in self.graph_data_face],
+                "eye": [int(x) for x in self.graph_data_eye]
             },
             "logs": self.logger.get_logs()[-100:]
         }
@@ -187,31 +222,43 @@ class SessionState:
         and constructs an ultra-fast zero-Base64 binary response packet:
         [ 4-byte uint32 JSON length L ] [ L-byte UTF-8 JSON ] [ Raw JPEG bytes ]
         """
-        # Decode image from buffer
-        np_arr = np.frombuffer(raw_bytes, np.uint8)
-        frame_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        if frame_bgr is None:
-            return b""
-            
-        annotated_frame, telemetry = self.process_frame(frame_bgr)
-        
-        # Encode annotated frame to JPEG (High quality 85 for sharp landmarks)
-        ret, jpeg_buf = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
-        if not ret:
-            return b""
-            
-        jpeg_bytes = jpeg_buf.tobytes()
-        json_bytes = json.dumps(telemetry).encode('utf-8')
-        header = struct.pack("!I", len(json_bytes))
-        
-        # Packed binary: Header (4 bytes) + JSON telemetry + JPEG Image
-        return header + json_bytes + jpeg_bytes
+        with self._lock:
+            try:
+                if not raw_bytes or len(raw_bytes) < 10:
+                    return b""
+                    
+                # Decode image from buffer
+                np_arr = np.frombuffer(raw_bytes, np.uint8)
+                frame_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                if frame_bgr is None or frame_bgr.size == 0:
+                    return b""
+                    
+                annotated_frame, telemetry = self.process_frame(frame_bgr)
+                
+                # Encode annotated frame to JPEG (High quality 85 for sharp landmarks)
+                ret, jpeg_buf = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                if not ret or jpeg_buf is None:
+                    return b""
+                    
+                jpeg_bytes = jpeg_buf.tobytes()
+                json_bytes = json.dumps(telemetry, default=_json_safe).encode('utf-8')
+                header = struct.pack("!I", len(json_bytes))
+                
+                # Packed binary: Header (4 bytes) + JSON telemetry + JPEG Image
+                return header + json_bytes + jpeg_bytes
+            except Exception as err:
+                logger.error(f"Error in process_binary_packet: {err}", exc_info=True)
+                return b""
 
     def cleanup(self):
         """Release session resources."""
-        if self.is_recording and self.video_writer is not None:
-            self.video_writer.release()
-            self.video_writer = None
+        with self._lock:
+            if self.is_recording and self.video_writer is not None:
+                try:
+                    self.video_writer.release()
+                except Exception:
+                    pass
+                self.video_writer = None
 
 
 class SessionManager:

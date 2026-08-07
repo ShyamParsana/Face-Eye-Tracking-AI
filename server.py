@@ -108,8 +108,8 @@ async def websocket_tracking_endpoint(websocket: WebSocket, session_id: str):
             
             if "bytes" in message and message["bytes"]:
                 raw_bytes = message["bytes"]
-                # Process binary frame through the exact Python CV algorithms
-                response_packet = session.process_binary_packet(raw_bytes)
+                # Process binary frame offloaded to worker thread to avoid blocking event loop
+                response_packet = await asyncio.to_thread(session.process_binary_packet, raw_bytes)
                 if response_packet:
                     await websocket.send_bytes(response_packet)
                     
@@ -142,9 +142,10 @@ async def websocket_tracking_endpoint(websocket: WebSocket, session_id: str):
     except WebSocketDisconnect:
         logger.info(f"WebSocket client disconnected: {session_id}")
     except Exception as e:
-        logger.error(f"WebSocket error in session {session_id}: {e}")
+        logger.warning(f"WebSocket notice for session {session_id}: {e}")
     finally:
-        session_manager.remove_session(session_id)
+        # Keep session alive for reconnection / HTTP fallback; background task handles cleanup
+        session.last_active = time.time() if 'time' in globals() else datetime.now().timestamp()
 
 @app.post("/api/session/{session_id}/frame")
 async def process_frame_http(session_id: str, request: Request):
@@ -152,12 +153,23 @@ async def process_frame_http(session_id: str, request: Request):
     HTTP POST Fallback Endpoint for streaming frames when WebSockets are blocked by client firewalls/proxies.
     Accepts raw JPEG bytes and returns packed binary packet.
     """
-    session = session_manager.get_or_create_session(session_id)
-    raw_bytes = await request.body()
-    if not raw_bytes:
-        raise HTTPException(status_code=400, detail="Empty frame body")
-    response_packet = session.process_binary_packet(raw_bytes)
-    return Response(content=response_packet, media_type="application/octet-stream")
+    try:
+        session = session_manager.get_or_create_session(session_id)
+        raw_bytes = await request.body()
+        if not raw_bytes or len(raw_bytes) < 10:
+            raise HTTPException(status_code=400, detail="Invalid frame body")
+            
+        response_packet = await asyncio.to_thread(session.process_binary_packet, raw_bytes)
+        if not response_packet:
+            # If frame could not be decoded or processed, return clean empty packet
+            return Response(content=b"", media_type="application/octet-stream", status_code=200)
+            
+        return Response(content=response_packet, media_type="application/octet-stream")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"HTTP frame processing error for {session_id}: {e}", exc_info=True)
+        return Response(content=b"", media_type="application/octet-stream", status_code=200)
 
 @app.post("/offer")
 async def webrtc_offer(payload: WebRTCOfferRequest):

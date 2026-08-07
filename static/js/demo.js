@@ -186,9 +186,21 @@
     // Camera Access Initialization (Responsive for Mobile & Desktop)
     async function initCamera() {
         try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                const isSecure = window.isSecureContext !== false;
+                throw new Error(
+                    !isSecure
+                        ? "Webcam access requires a secure connection (HTTPS). Please open the site using https://"
+                        : "Your browser does not support webcam access via navigator.mediaDevices."
+                );
+            }
+
             modalError.classList.add('hidden');
             btnGrantCamera.textContent = 'Requesting camera...';
             btnGrantCamera.disabled = true;
+            if (placeholderStatusText) {
+                placeholderStatusText.textContent = 'Requesting camera permissions...';
+            }
 
             const constraints = {
                 video: {
@@ -210,36 +222,31 @@
             }
 
             localStream = stream;
+            webcamVideo.srcObject = stream;
 
-            await new Promise((resolve) => {
-                let resolved = false;
-                const onReady = () => {
-                    if (!resolved) {
-                        resolved = true;
-                        webcamVideo.play().catch((e) => console.warn('Video play caught:', e));
-                        captureCanvas.width = webcamVideo.videoWidth || 640;
-                        captureCanvas.height = webcamVideo.videoHeight || 480;
-                        resolve();
-                    }
-                };
+            try {
+                await webcamVideo.play();
+            } catch (playErr) {
+                console.warn('Video auto-play caught:', playErr);
+            }
 
-                webcamVideo.onloadedmetadata = onReady;
-                webcamVideo.oncanplay = onReady;
-                webcamVideo.onplaying = onReady;
-                webcamVideo.srcObject = stream;
-
-                // Fallback timeout in case browser events fire asynchronously or are delayed
-                setTimeout(onReady, 800);
-            });
+            captureCanvas.width = webcamVideo.videoWidth || 640;
+            captureCanvas.height = webcamVideo.videoHeight || 480;
 
             permissionModal.classList.add('hidden');
+            if (placeholderStatusText) {
+                placeholderStatusText.textContent = 'Connecting to Python Computer Vision Engine...';
+            }
             startWebSocketStreaming();
         } catch (err) {
             console.error('Camera access denied or prompt required:', err);
             btnGrantCamera.disabled = false;
             btnGrantCamera.textContent = 'Grant Camera Access';
-            modalError.textContent = `Error accessing webcam: ${err.message || err}. Please allow camera access in browser settings.`;
+            modalError.textContent = `Error accessing webcam: ${err.message || err}. Please ensure camera permissions are allowed in your browser settings.`;
             modalError.classList.remove('hidden');
+            if (placeholderStatusText) {
+                placeholderStatusText.textContent = `Camera Access Required: ${err.message || err}`;
+            }
         }
     }
 
@@ -252,6 +259,15 @@
 
     let wsRetryCount = 0;
     let streamMode = 'WS'; // 'WS' or 'HTTP'
+    let isCaptureLoopRunning = false;
+    let animFrameId = null;
+
+    function ensureCaptureLoop() {
+        if (!isCaptureLoopRunning) {
+            isCaptureLoopRunning = true;
+            captureAndSendLoop();
+        }
+    }
 
     // High-Performance Binary WebSocket Client with Auto-HTTP Fallback
     function startWebSocketStreaming() {
@@ -277,7 +293,7 @@
                 if (streamProtocol) streamProtocol.textContent = 'Binary WS';
                 isStreaming = true;
                 isProcessingFrame = false;
-                captureAndSendLoop();
+                ensureCaptureLoop();
             };
 
             ws.onmessage = (event) => {
@@ -320,7 +336,7 @@
                     connectionDot.className = 'status-dot connected';
                     connectionText.textContent = 'PYTHON 3.12 ENGINE (HTTP STREAM)';
                     if (streamProtocol) streamProtocol.textContent = 'HTTP Stream';
-                    captureAndSendLoop();
+                    ensureCaptureLoop();
                     
                     // Periodic retry for WebSocket upgrade
                     setTimeout(() => {
@@ -339,14 +355,14 @@
             connectionDot.className = 'status-dot connected';
             connectionText.textContent = 'PYTHON 3.12 ENGINE (HTTP STREAM)';
             if (streamProtocol) streamProtocol.textContent = 'HTTP Stream';
-            captureAndSendLoop();
+            ensureCaptureLoop();
         }
     }
 
     // Zero-Base64 Binary Packet Unpacker
     function unpackBinaryPacket(buffer) {
         try {
-            if (buffer.byteLength < 4) return;
+            if (!buffer || buffer.byteLength < 4) return;
             const view = new DataView(buffer);
             const jsonLength = view.getUint32(0, false); // 4-byte uint32 Big Endian
             
@@ -384,7 +400,10 @@
 
     // Adaptive Frame Capture and Sending Loop
     function captureAndSendLoop() {
-        if (!isStreaming) return;
+        if (!isStreaming) {
+            isCaptureLoopRunning = false;
+            return;
+        }
 
         const now = performance.now();
 
@@ -421,18 +440,23 @@
                     return;
                 }
 
-                if (streamMode === 'WS' && ws && ws.readyState === WebSocket.OPEN) {
-                    blob.arrayBuffer().then((buffer) => {
-                        try {
-                            ws.send(buffer);
-                        } catch (sendErr) {
-                            console.error('WS send error:', sendErr);
+                if (streamMode === 'WS') {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        blob.arrayBuffer().then((buffer) => {
+                            try {
+                                ws.send(buffer);
+                            } catch (sendErr) {
+                                console.error('WS send error:', sendErr);
+                                isProcessingFrame = false;
+                            }
+                        }).catch(() => {
                             isProcessingFrame = false;
-                        }
-                    }).catch(() => {
+                        });
+                    } else {
+                        // WebSocket is still connecting; do not spam HTTP requests
                         isProcessingFrame = false;
-                    });
-                } else {
+                    }
+                } else if (streamMode === 'HTTP') {
                     // Transparent HTTP Frame Stream Fallback
                     fetch(`/api/session/${sessionId}/frame`, {
                         method: 'POST',
@@ -440,24 +464,26 @@
                         headers: { 'Content-Type': 'application/octet-stream' }
                     })
                     .then((res) => {
-                        if (!res.ok) throw new Error('HTTP Frame Error');
+                        if (!res.ok) throw new Error(`HTTP Frame Status ${res.status}`);
                         return res.arrayBuffer();
                     })
                     .then((buffer) => {
                         const frameLatency = Math.round(performance.now() - lastSendTime);
                         valLatency.textContent = `${frameLatency} ms`;
                         isProcessingFrame = false;
-                        unpackBinaryPacket(buffer);
+                        if (buffer && buffer.byteLength > 4) {
+                            unpackBinaryPacket(buffer);
+                        }
                     })
                     .catch((httpErr) => {
-                        console.warn('HTTP frame stream note:', httpErr);
+                        console.warn('HTTP frame stream notice:', httpErr);
                         isProcessingFrame = false;
                     });
                 }
             }, 'image/jpeg', 0.80);
         }
 
-        requestAnimationFrame(captureAndSendLoop);
+        animFrameId = requestAnimationFrame(captureAndSendLoop);
     }
 
     // Update UI Stats and Dashboard
