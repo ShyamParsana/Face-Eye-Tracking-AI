@@ -3,14 +3,15 @@ import os
 from datetime import datetime
 
 class EventLogger:
-    def __init__(self):
+    def __init__(self, session_id: str = None, *args, **kwargs):
         """Initialize the event logger using a Pandas DataFrame."""
+        self.session_id = session_id
         self.columns = ["Timestamp", "Event", "Count"]
         self.df = pd.DataFrame(columns=self.columns)
         self.assets_dir = "assets"
         
         if not os.path.exists(self.assets_dir):
-            os.makedirs(self.assets_dir)
+            os.makedirs(self.assets_dir, exist_ok=True)
             
     def log_event(self, event_name, count):
         """

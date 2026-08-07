@@ -193,26 +193,32 @@ async def webrtc_offer(payload: WebRTCOfferRequest):
 @app.post("/api/session/{session_id}/action")
 async def handle_session_action(session_id: str, req: ActionRequest):
     """Handle control actions from frontend buttons."""
-    session = session_manager.get_or_create_session(session_id)
-    action = req.action.lower()
-    
-    if action == "start_counting":
-        session.start_counting()
-        return {"status": "ok", "action": "start_counting", "is_counting": True}
-    elif action == "stop_counting":
-        session.stop_counting()
-        return {"status": "ok", "action": "stop_counting", "is_counting": False}
-    elif action == "reset_counts":
-        session.reset_counts()
-        return {"status": "ok", "action": "reset_counts"}
-    elif action == "clear_data":
-        session.clear_data()
-        return {"status": "ok", "action": "clear_data"}
-    elif action == "toggle_recording":
-        is_rec, fname = session.toggle_recording()
-        return {"status": "ok", "is_recording": is_rec, "filename": fname}
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown action: {req.action}")
+    try:
+        session = session_manager.get_or_create_session(session_id)
+        action = req.action.lower()
+        
+        if action == "start_counting":
+            session.start_counting()
+            return {"status": "ok", "action": "start_counting", "is_counting": True}
+        elif action == "stop_counting":
+            session.stop_counting()
+            return {"status": "ok", "action": "stop_counting", "is_counting": False}
+        elif action == "reset_counts":
+            session.reset_counts()
+            return {"status": "ok", "action": "reset_counts"}
+        elif action == "clear_data":
+            session.clear_data()
+            return {"status": "ok", "action": "clear_data"}
+        elif action == "toggle_recording":
+            is_rec, fname = session.toggle_recording()
+            return {"status": "ok", "is_recording": is_rec, "filename": fname}
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {req.action}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error executing action '{req.action}' for {session_id}: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
 
 @app.get("/api/session/{session_id}/export/csv")
 async def export_session_csv(session_id: str):
