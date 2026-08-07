@@ -269,7 +269,7 @@
         }
     }
 
-    // High-Performance Binary WebSocket Client with Auto-HTTP Fallback
+    // High-Performance Binary WebSocket Client with Instant Auto-HTTP Fallback
     function startWebSocketStreaming() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
             return;
@@ -278,7 +278,7 @@
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/track/${sessionId}`;
 
-        connectionText.textContent = 'Connecting...';
+        connectionText.textContent = 'Connecting to Python Engine...';
         connectionDot.className = 'status-dot';
 
         try {
@@ -320,42 +320,38 @@
             };
 
             ws.onerror = (err) => {
-                console.warn('WebSocket status note:', err);
+                console.warn('WebSocket status note, switching to HTTP stream fallback:', err);
                 isProcessingFrame = false;
+                switchToHttpFallback();
             };
 
             ws.onclose = () => {
                 wsRetryCount++;
                 isProcessingFrame = false;
-                
-                if (wsRetryCount >= 2 && streamMode !== 'HTTP') {
-                    // Activate transparent HTTP frame streaming fallback
-                    console.log('Activating HTTP Streaming Fallback...');
-                    streamMode = 'HTTP';
-                    isStreaming = true;
-                    connectionDot.className = 'status-dot connected';
-                    connectionText.textContent = 'PYTHON 3.12 ENGINE (HTTP STREAM)';
-                    if (streamProtocol) streamProtocol.textContent = 'HTTP Stream';
-                    ensureCaptureLoop();
-                    
-                    // Periodic retry for WebSocket upgrade
-                    setTimeout(() => {
-                        if (streamMode === 'HTTP') startWebSocketStreaming();
-                    }, 15000);
-                } else if (streamMode === 'WS') {
-                    connectionDot.className = 'status-dot';
-                    connectionText.textContent = 'Connecting...';
-                    setTimeout(startWebSocketStreaming, 2000);
-                }
+                switchToHttpFallback();
             };
         } catch (wsErr) {
-            console.warn('WebSocket init exception, falling back to HTTP:', wsErr);
+            console.warn('WebSocket init exception, switching to HTTP stream fallback:', wsErr);
+            switchToHttpFallback();
+        }
+    }
+
+    function switchToHttpFallback() {
+        if (streamMode !== 'HTTP') {
+            console.log('Activating HTTP Streaming Fallback...');
             streamMode = 'HTTP';
             isStreaming = true;
             connectionDot.className = 'status-dot connected';
             connectionText.textContent = 'PYTHON 3.12 ENGINE (HTTP STREAM)';
             if (streamProtocol) streamProtocol.textContent = 'HTTP Stream';
             ensureCaptureLoop();
+            
+            // Background upgrade retry to WebSocket every 12s
+            setTimeout(() => {
+                if (streamMode === 'HTTP' && (!ws || ws.readyState === WebSocket.CLOSED)) {
+                    startWebSocketStreaming();
+                }
+            }, 12000);
         }
     }
 
@@ -407,8 +403,8 @@
 
         const now = performance.now();
 
-        // Watchdog: If server didn't respond within 800ms, unlock the pipeline
-        if (isProcessingFrame && (now - lastSendTime > 800)) {
+        // Watchdog: If server didn't respond within 400ms, unlock the pipeline
+        if (isProcessingFrame && (now - lastSendTime > 400)) {
             isProcessingFrame = false;
         }
 
@@ -423,8 +419,8 @@
             isProcessingFrame = true;
             lastSendTime = now;
 
-            const vWidth = webcamVideo.videoWidth || 640;
-            const vHeight = webcamVideo.videoHeight || 480;
+            const vWidth = Math.max(webcamVideo.videoWidth || 0, 320);
+            const vHeight = Math.max(webcamVideo.videoHeight || 0, 240);
             if (captureCanvas.width !== vWidth || captureCanvas.height !== vHeight) {
                 captureCanvas.width = vWidth;
                 captureCanvas.height = vHeight;
@@ -440,23 +436,19 @@
                     return;
                 }
 
-                if (streamMode === 'WS') {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        blob.arrayBuffer().then((buffer) => {
-                            try {
-                                ws.send(buffer);
-                            } catch (sendErr) {
-                                console.error('WS send error:', sendErr);
-                                isProcessingFrame = false;
-                            }
-                        }).catch(() => {
+                if (streamMode === 'WS' && ws && ws.readyState === WebSocket.OPEN) {
+                    blob.arrayBuffer().then((buffer) => {
+                        try {
+                            ws.send(buffer);
+                        } catch (sendErr) {
+                            console.error('WS send error:', sendErr);
                             isProcessingFrame = false;
-                        });
-                    } else {
-                        // WebSocket is still connecting; do not spam HTTP requests
+                            switchToHttpFallback();
+                        }
+                    }).catch(() => {
                         isProcessingFrame = false;
-                    }
-                } else if (streamMode === 'HTTP') {
+                    });
+                } else {
                     // Transparent HTTP Frame Stream Fallback
                     fetch(`/api/session/${sessionId}/frame`, {
                         method: 'POST',

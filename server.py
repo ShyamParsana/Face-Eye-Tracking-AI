@@ -105,6 +105,11 @@ async def websocket_tracking_endpoint(websocket: WebSocket, session_id: str):
         while True:
             # Receive binary frame or text command from browser
             message = await websocket.receive()
+            msg_type = message.get("type")
+            
+            if msg_type == "websocket.disconnect":
+                logger.info(f"WebSocket client closed cleanly: {session_id}")
+                break
             
             if "bytes" in message and message["bytes"]:
                 raw_bytes = message["bytes"]

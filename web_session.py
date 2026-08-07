@@ -221,26 +221,29 @@ class SessionState:
         Processes an incoming binary image frame, runs the pipeline,
         and constructs an ultra-fast zero-Base64 binary response packet:
         [ 4-byte uint32 JSON length L ] [ L-byte UTF-8 JSON ] [ Raw JPEG bytes ]
+        Always returns a valid packet so streaming client never stalls.
         """
         with self._lock:
             try:
-                if not raw_bytes or len(raw_bytes) < 10:
-                    return b""
+                frame_bgr = None
+                if raw_bytes and len(raw_bytes) >= 10:
+                    np_arr = np.frombuffer(raw_bytes, np.uint8)
+                    frame_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
                     
-                # Decode image from buffer
-                np_arr = np.frombuffer(raw_bytes, np.uint8)
-                frame_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
                 if frame_bgr is None or frame_bgr.size == 0:
-                    return b""
+                    # Create clean placeholder frame if camera packet was incomplete
+                    frame_bgr = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(frame_bgr, "Camera Feed Initializing...", (120, 240), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
                     
                 annotated_frame, telemetry = self.process_frame(frame_bgr)
                 
                 # Encode annotated frame to JPEG (High quality 85 for sharp landmarks)
                 ret, jpeg_buf = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
                 if not ret or jpeg_buf is None:
-                    return b""
+                    _, jpeg_buf = cv2.imencode('.jpg', frame_bgr)
                     
-                jpeg_bytes = jpeg_buf.tobytes()
+                jpeg_bytes = jpeg_buf.tobytes() if jpeg_buf is not None else b""
                 json_bytes = json.dumps(telemetry, default=_json_safe).encode('utf-8')
                 header = struct.pack("!I", len(json_bytes))
                 
@@ -248,7 +251,31 @@ class SessionState:
                 return header + json_bytes + jpeg_bytes
             except Exception as err:
                 logger.error(f"Error in process_binary_packet: {err}", exc_info=True)
-                return b""
+                # Fail-safe minimal response
+                try:
+                    fallback_telemetry = {
+                        "fps": int(round(self.fps)),
+                        "session_time": "00:00",
+                        "session_seconds": 0,
+                        "face_dir": "Neutral",
+                        "eye_dir": "Center",
+                        "confidence": 0.0,
+                        "pitch": 0.0,
+                        "yaw": 0.0,
+                        "counts": {k: 0 for k in ["Right Face Count", "Left Face Count", "Up Count", "Down Count",
+                                                  "Left Blink Count", "Right Blink Count", "Both Blink Count",
+                                                  "Eye Left Count", "Eye Right Count", "Eye Up Count", "Eye Down Count"]},
+                        "is_counting": False,
+                        "is_recording": False,
+                        "graph": {"face": [], "eye": []},
+                        "logs": []
+                    }
+                    dummy_img = np.zeros((480, 640, 3), dtype=np.uint8)
+                    _, dummy_buf = cv2.imencode('.jpg', dummy_img)
+                    j_bytes = json.dumps(fallback_telemetry).encode('utf-8')
+                    return struct.pack("!I", len(j_bytes)) + j_bytes + dummy_buf.tobytes()
+                except Exception:
+                    return b""
 
     def cleanup(self):
         """Release session resources."""
