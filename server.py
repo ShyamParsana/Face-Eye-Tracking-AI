@@ -3,7 +3,6 @@ import io
 import json
 import logging
 import os
-import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
@@ -32,7 +31,7 @@ async def lifespan(app: FastAPI):
                 logger.error(f"Error in session cleanup: {e}")
 
     cleanup_task = asyncio.create_task(cleanup_loop())
-    logger.info("Face & Eye Tracking AI Web Server started successfully.")
+    logger.info("Face & Eye Tracking AI Web Server started.")
     yield
     cleanup_task.cancel()
     await webrtc_manager.close_all()
@@ -175,7 +174,7 @@ async def process_frame_http(session_id: str, request: Request):
         raise
     except Exception as e:
         logger.error(f"HTTP frame processing error for {session_id}: {e}", exc_info=True)
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return Response(content=b"", media_type="application/octet-stream", status_code=200)
 
 @app.post("/offer")
 async def webrtc_offer(payload: WebRTCOfferRequest):

@@ -235,8 +235,8 @@
             captureCanvas.height = webcamVideo.videoHeight || 480;
 
             permissionModal.classList.add('hidden');
-            if (videoPlaceholder) {
-                videoPlaceholder.style.display = 'none';
+            if (placeholderStatusText) {
+                placeholderStatusText.textContent = 'Connecting to Python Computer Vision Engine...';
             }
             startWebSocketStreaming();
         } catch (err) {
@@ -262,7 +262,6 @@
     let streamMode = 'WS'; // 'WS' or 'HTTP'
     let isCaptureLoopRunning = false;
     let animFrameId = null;
-    let currentHttpController = null;
 
     function ensureCaptureLoop() {
         if (!isCaptureLoopRunning) {
@@ -283,19 +282,11 @@
         connectionText.textContent = 'Connecting to Python Engine...';
         connectionDot.className = 'status-dot';
 
-        let wsTimeout = setTimeout(() => {
-            if (ws && ws.readyState !== WebSocket.OPEN) {
-                console.log('WebSocket handshake taking >3s, switching to HTTP stream fallback...');
-                switchToHttpFallback();
-            }
-        }, 3000);
-
         try {
             ws = new WebSocket(wsUrl);
             ws.binaryType = 'arraybuffer';
 
             ws.onopen = () => {
-                clearTimeout(wsTimeout);
                 wsRetryCount = 0;
                 streamMode = 'WS';
                 connectionDot.className = 'status-dot connected';
@@ -330,20 +321,17 @@
             };
 
             ws.onerror = (err) => {
-                clearTimeout(wsTimeout);
                 console.warn('WebSocket status note, switching to HTTP stream fallback:', err);
                 isProcessingFrame = false;
                 switchToHttpFallback();
             };
 
             ws.onclose = () => {
-                clearTimeout(wsTimeout);
                 wsRetryCount++;
                 isProcessingFrame = false;
                 switchToHttpFallback();
             };
         } catch (wsErr) {
-            clearTimeout(wsTimeout);
             console.warn('WebSocket init exception, switching to HTTP stream fallback:', wsErr);
             switchToHttpFallback();
         }
@@ -392,11 +380,11 @@
                 }
                 prevBlobUrl = URL.createObjectURL(blob);
                 annotatedImg.src = prevBlobUrl;
-                annotatedImg.style.opacity = '1';
 
                 if (!firstFrameReceived) {
                     firstFrameReceived = true;
-                    if (videoPlaceholder) videoPlaceholder.style.display = 'none';
+                    videoPlaceholder.style.display = 'none';
+                    annotatedImg.style.opacity = '1';
                 }
             }
 
@@ -407,11 +395,18 @@
         }
     }
 
-    // Single In-Flight Adaptive Frame Capture & Sending Loop
+    // Adaptive Frame Capture and Sending Loop
     function captureAndSendLoop() {
         if (!isStreaming) {
             isCaptureLoopRunning = false;
             return;
+        }
+
+        const now = performance.now();
+
+        // Watchdog: If server didn't respond within 400ms, unlock the pipeline
+        if (isProcessingFrame && (now - lastSendTime > 400)) {
+            isProcessingFrame = false;
         }
 
         // Ensure webcam is actively playing
@@ -419,26 +414,23 @@
             webcamVideo.play().catch(() => {});
         }
 
-        const now = performance.now();
-        // Target ~30 FPS (33ms interval) to save bandwidth and keep latency minimal
-        const elapsed = now - lastSendTime;
         const hasActiveStream = (webcamVideo.readyState >= 2 || webcamVideo.currentTime > 0 || (webcamVideo.srcObject && webcamVideo.srcObject.active));
 
-        if (!isProcessingFrame && hasActiveStream && elapsed >= 33) {
+        if (!isProcessingFrame && hasActiveStream) {
             isProcessingFrame = true;
             lastSendTime = now;
 
-            const vWidth = Math.min(Math.max(webcamVideo.videoWidth || 0, 320), 640);
-            const vHeight = Math.min(Math.max(webcamVideo.videoHeight || 0, 240), 480);
+            const vWidth = Math.max(webcamVideo.videoWidth || 0, 320);
+            const vHeight = Math.max(webcamVideo.videoHeight || 0, 240);
             if (captureCanvas.width !== vWidth || captureCanvas.height !== vHeight) {
                 captureCanvas.width = vWidth;
                 captureCanvas.height = vHeight;
             }
 
-            // Draw current webcam frame onto canvas
+            // Draw current webcam frame onto offscreen canvas
             captureCtx.drawImage(webcamVideo, 0, 0, captureCanvas.width, captureCanvas.height);
             
-            // Export canvas directly as binary JPEG blob (0.75 quality for high speed & low latency)
+            // Export canvas directly as binary JPEG blob
             captureCanvas.toBlob((blob) => {
                 if (!blob) {
                     isProcessingFrame = false;
@@ -458,25 +450,13 @@
                         isProcessingFrame = false;
                     });
                 } else {
-                    // Transparent HTTP Frame Stream Fallback with AbortController protection
-                    if (currentHttpController) {
-                        try { currentHttpController.abort(); } catch (e) {}
-                    }
-                    currentHttpController = new AbortController();
-                    const abortTimeout = setTimeout(() => {
-                        if (currentHttpController) {
-                            try { currentHttpController.abort(); } catch (e) {}
-                        }
-                    }, 3500);
-
+                    // Transparent HTTP Frame Stream Fallback
                     fetch(`/api/session/${sessionId}/frame`, {
                         method: 'POST',
                         body: blob,
-                        headers: { 'Content-Type': 'application/octet-stream' },
-                        signal: currentHttpController.signal
+                        headers: { 'Content-Type': 'application/octet-stream' }
                     })
                     .then((res) => {
-                        clearTimeout(abortTimeout);
                         if (!res.ok) throw new Error(`HTTP Frame Status ${res.status}`);
                         return res.arrayBuffer();
                     })
@@ -489,14 +469,11 @@
                         }
                     })
                     .catch((httpErr) => {
-                        clearTimeout(abortTimeout);
-                        if (httpErr.name !== 'AbortError') {
-                            console.warn('HTTP frame stream notice:', httpErr);
-                        }
+                        console.warn('HTTP frame stream notice:', httpErr);
                         isProcessingFrame = false;
                     });
                 }
-            }, 'image/jpeg', 0.75);
+            }, 'image/jpeg', 0.80);
         }
 
         animFrameId = requestAnimationFrame(captureAndSendLoop);
