@@ -230,13 +230,13 @@
                 console.warn('Video auto-play caught:', playErr);
             }
 
-            webcamVideo.style.display = 'block';
-            videoPlaceholder.style.display = 'none';
-
             captureCanvas.width = webcamVideo.videoWidth || 640;
             captureCanvas.height = webcamVideo.videoHeight || 480;
 
             permissionModal.classList.add('hidden');
+            if (placeholderStatusText) {
+                placeholderStatusText.textContent = 'Connecting to Python Computer Vision Engine...';
+            }
             startWebSocketStreaming();
         } catch (err) {
             console.error('Camera access denied or prompt required:', err);
@@ -244,7 +244,6 @@
             btnGrantCamera.textContent = 'Grant Camera Access';
             modalError.textContent = `Error accessing webcam: ${err.message || err}. Please ensure camera permissions are allowed in your browser settings.`;
             modalError.classList.remove('hidden');
-            permissionModal.classList.remove('hidden');
             if (placeholderStatusText) {
                 placeholderStatusText.textContent = `Camera Access Required: ${err.message || err}`;
             }

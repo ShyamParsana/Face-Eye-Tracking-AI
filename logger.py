@@ -3,15 +3,14 @@ import os
 from datetime import datetime
 
 class EventLogger:
-    def __init__(self, session_id: str = None, *args, **kwargs):
+    def __init__(self):
         """Initialize the event logger using a Pandas DataFrame."""
-        self.session_id = session_id
         self.columns = ["Timestamp", "Event", "Count"]
         self.df = pd.DataFrame(columns=self.columns)
         self.assets_dir = "assets"
         
         if not os.path.exists(self.assets_dir):
-            os.makedirs(self.assets_dir, exist_ok=True)
+            os.makedirs(self.assets_dir)
             
     def log_event(self, event_name, count):
         """
@@ -22,9 +21,7 @@ class EventLogger:
             count (int): The updated count for this event
         """
         timestamp = datetime.now().strftime("%H:%M:%S")
-        new_row = {"Timestamp": str(event_name if event_name else ""), "Event": str(event_name), "Count": int(count)}
-        # Set proper timestamp in column
-        new_row["Timestamp"] = timestamp
+        new_row = {"Timestamp": str(timestamp), "Event": str(event_name), "Count": int(count)}
         # Use concat instead of append since append is deprecated in newer pandas
         self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
         
