@@ -26,6 +26,7 @@
     
     const annotatedImg = document.getElementById('annotated-stream');
     const videoPlaceholder = document.getElementById('video-placeholder');
+    const placeholderStatusText = document.getElementById('placeholder-status-text');
     
     const connectionDot = document.getElementById('connection-dot');
     const connectionText = document.getElementById('connection-text');
