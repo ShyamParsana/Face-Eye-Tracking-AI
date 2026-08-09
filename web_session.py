@@ -250,32 +250,36 @@ class SessionState:
                 # Packed binary: Header (4 bytes) + JSON telemetry + JPEG Image
                 return header + json_bytes + jpeg_bytes
             except Exception as err:
-                logger.error(f"Error in process_binary_packet: {err}", exc_info=True)
-                # Fail-safe minimal response
+                logger.exception("Error in process_binary_packet")
+                # Fail-safe minimal response packet must still deliver a valid header + JSON payload.
+                fallback_telemetry = {
+                    "fps": int(round(self.fps)),
+                    "session_time": "00:00",
+                    "session_seconds": 0,
+                    "face_dir": "Neutral",
+                    "eye_dir": "Center",
+                    "confidence": 0.0,
+                    "pitch": 0.0,
+                    "yaw": 0.0,
+                    "counts": {k: 0 for k in ["Right Face Count", "Left Face Count", "Up Count", "Down Count",
+                                              "Left Blink Count", "Right Blink Count", "Both Blink Count",
+                                              "Eye Left Count", "Eye Right Count", "Eye Up Count", "Eye Down Count"]},
+                    "is_counting": False,
+                    "is_recording": False,
+                    "graph": {"face": [], "eye": []},
+                    "logs": []
+                }
+                json_bytes = json.dumps(fallback_telemetry, default=_json_safe).encode('utf-8')
                 try:
-                    fallback_telemetry = {
-                        "fps": int(round(self.fps)),
-                        "session_time": "00:00",
-                        "session_seconds": 0,
-                        "face_dir": "Neutral",
-                        "eye_dir": "Center",
-                        "confidence": 0.0,
-                        "pitch": 0.0,
-                        "yaw": 0.0,
-                        "counts": {k: 0 for k in ["Right Face Count", "Left Face Count", "Up Count", "Down Count",
-                                                  "Left Blink Count", "Right Blink Count", "Both Blink Count",
-                                                  "Eye Left Count", "Eye Right Count", "Eye Up Count", "Eye Down Count"]},
-                        "is_counting": False,
-                        "is_recording": False,
-                        "graph": {"face": [], "eye": []},
-                        "logs": []
-                    }
                     dummy_img = np.zeros((480, 640, 3), dtype=np.uint8)
-                    _, dummy_buf = cv2.imencode('.jpg', dummy_img)
-                    j_bytes = json.dumps(fallback_telemetry).encode('utf-8')
-                    return struct.pack("!I", len(j_bytes)) + j_bytes + dummy_buf.tobytes()
+                    success, dummy_buf = cv2.imencode('.jpg', dummy_img)
+                    if success and dummy_buf is not None:
+                        jpeg_bytes = dummy_buf.tobytes()
+                    else:
+                        jpeg_bytes = b'\xff\xd8\xff\xd9'
                 except Exception:
-                    return b""
+                    jpeg_bytes = b'\xff\xd8\xff\xd9'
+                return struct.pack("!I", len(json_bytes)) + json_bytes + jpeg_bytes
 
     def cleanup(self):
         """Release session resources."""
