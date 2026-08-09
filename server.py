@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
@@ -37,6 +38,11 @@ async def lifespan(app: FastAPI):
     await webrtc_manager.close_all()
     logger.info("Server shutdown complete.")
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+
 app = FastAPI(
     title="Face & Eye Tracking AI API",
     description="Production-ready real-time Computer Vision web application and portfolio live demo.",
@@ -54,10 +60,10 @@ app.add_middleware(
 )
 
 # Mount static assets
-os.makedirs("static", exist_ok=True)
-os.makedirs("templates", exist_ok=True)
-os.makedirs("assets", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(TEMPLATES_DIR, exist_ok=True)
+os.makedirs(ASSETS_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 class ActionRequest(BaseModel):
     action: str
@@ -73,7 +79,7 @@ class WebRTCOfferRequest(BaseModel):
 @app.head("/demo")
 async def serve_demo():
     """Serve the interactive live demo dashboard directly."""
-    demo_path = os.path.join("templates", "demo.html")
+    demo_path = os.path.join(TEMPLATES_DIR, "demo.html")
     if os.path.exists(demo_path):
         with open(demo_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
@@ -256,11 +262,11 @@ async def export_session_excel(session_id: str):
 @app.get("/api/assets/{filename}")
 async def get_asset(filename: str):
     """Retrieve saved screenshots or recordings."""
-    file_path = os.path.join("assets", filename)
+    file_path = os.path.join(ASSETS_DIR, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("server:app", host="0.0.0.0", port=int(os.environ.get('PORT', 8000)), reload=True)
